@@ -1,0 +1,11 @@
+int64 x
+int64 y
+float32 orientation
+sensor_msgs/Image img
+---
+int64 x1
+int64 y1
+int64 x2
+int64 y2
+float32 push_orientation
+
