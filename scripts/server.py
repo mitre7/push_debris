@@ -54,11 +54,14 @@ def extractState(img, x, y, orientation):
     grid_width = 3
     grid_height = 3
     grid_step = 60
-    state = [0] * 8
+    state = [0] * 4
+
     j = 0
+
     for i in range(grid_width * grid_height):
-        if i == 4:
+        if i%2 == 0:
             continue
+
 
         row = int(i / grid_width)
         col = i % grid_width
@@ -69,22 +72,53 @@ def extractState(img, x, y, orientation):
         y2 = (col + 1) * grid_step
         crop = cropped[y1:y2, x1:x2]
 
-        #cv2.imshow("test_1", crop)
+	#cv2.imshow("cropped", crop)
         #cv2.waitKey()
 
-        average_gradient = averageGradient(crop)
-        if np.abs(average_gradient) % np.pi < 1.e-6:
+        if i == 5:
+            crop = cropped[y1+5:y2, x1:x2]
+
+
+        gradient_strength = averageStrength(crop)
+        if gradient_strength > 0.99:
             state[j] = 1
         else:
             state[j] = 0
-        print(state[j], average_gradient)
-        j+=1
 
-	print(average_gradient)
+        j += 1
+
+    print(state)
+
     return tuple(state)
 
 
+def averageStrength(img):
+
+    dx = cv2.Sobel(img,cv2.CV_32F,1,0,ksize=3)
+    dy = cv2.Sobel(img,cv2.CV_32F,0,1,ksize=3)
+
+    dxabs = cv2.convertScaleAbs(dx)
+    dyabs = cv2.convertScaleAbs(dy)
+    mag = cv2.addWeighted(dxabs, 0.5, dyabs, 0.5, 0)
+
+    rows, cols = mag.shape
+
+    #cv2.imshow("mag", mag)
+    #cv2.waitKey()
+
+    sum = 0
+    for x in range(0, cols):
+        for y in range(0, rows):
+            if mag[y][x] < 50:
+                sum += 1
+
+    strength = float (sum) / ( float(rows*cols))
+
+    return strength
+
+
 def loadQ():
+    action_space = 4
     Q = collections.defaultdict(lambda: np.zeros(action_space))
     print("nai")
     key_file = "/home/mitre/Mitre/clopema_packages/src/radioroso_certh/push_debris/txt/key.txt"
@@ -109,6 +143,9 @@ def loadQ():
 
 
 def predict_push(req):
+    print('inside server!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    print(req.x, req.y, req.orientation)
+
     VALID_ACTIONS = [0, 90, 180, 270]
     Q = loadQ()
 
@@ -119,12 +156,10 @@ def predict_push(req):
 
 
     state = extractState(cv_image, req.x, req.y, req.orientation)
-    print(state)
-    print(Q[state])
 
     action = np.argmax(Q[state])
-    #action = 1
     direction = VALID_ACTIONS[action]
+    #print(direction)
 
     rows, cols, ch = cv_image.shape
     fx = 1920/ float(cols)
@@ -143,8 +178,8 @@ def predict_push(req):
     y1 = int( p[1] + ( np.sin( (direction + df) * np.pi/180 ) * t ) )
 
 
-    x2 = int( p[0] - ( np.cos( (direction + df) * np.pi/180 ) * (t + 50) ) )
-    y2 = int( p[1] + ( np.sin( (direction + df) * np.pi/180 ) * (t + 50) ) )
+    x2 = int( p[0] - ( np.cos( (direction + df) * np.pi/180 ) * (t + 75) ) )
+    y2 = int( p[1] + ( np.sin( (direction + df) * np.pi/180 ) * (t + 75) ) )
 
     #small = cv2.circle(small, p, 5, (0,0,0), 3)
     #small = cv2.circle(small, (x1, y1), 3, (0,0,0), 3)
@@ -159,10 +194,23 @@ def predict_push(req):
 
     theta = df + direction
 
-    if (theta >= 0 and theta <= 90) or (theta > 180 and theta <= 270):
-        theta = theta + 90
+    print("Direction:")
+    print(direction)
+
+
+    print("Theta before:")
+    print(theta)
+
+    if theta >= 0 and theta <= 180:
+       theta = 180 - theta
+    elif theta > 180 and theta <= 270:
+       theta = 360 - (theta-180)
     else:
-        theta = theta - 90
+       theta = 270 - (theta - 270)
+
+    print("Theta after:")
+    print(theta)
+	
 
     theta = theta * np.pi / 180
     
