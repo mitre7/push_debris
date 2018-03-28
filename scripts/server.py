@@ -57,6 +57,8 @@ def extractState(img, x, y, orientation):
     state = [0] * 4
 
     j = 0
+    reward1 = 0
+    reward2 = 0
 
     for i in range(grid_width * grid_height):
         if i%2 == 0:
@@ -75,24 +77,41 @@ def extractState(img, x, y, orientation):
 	#cv2.imshow("cropped", crop)
         #cv2.waitKey()
 
+	if i == 3:
+ 	    crop = cropped[y1+20:y2, x1:x2]
+
         if i == 5:
-            crop = cropped[y1+5:y2, x1:x2]
+            crop = cropped[y1+5:y2-15, x1:x2]
 
+	if i == 1:
+ 	    crop = cropped[y1:y2, x1+20:x2]
+	    
 
-        gradient_strength = averageStrength(crop)
-        if gradient_strength > 0.99:
+	if i == 7:
+ 	    crop = cropped[y1:y2, x1:x2-20]   
+	    
+	
+        gradient_strength = averageStrength(crop)	
+        if gradient_strength > 0.94:
             state[j] = 1
         else:
             state[j] = 0
 
+
         j += 1
 
     print(state)
+    if state[0] == 1 and state[3] == 1:
+	is_cleared = True
+    else:
+	is_cleared = False
 
-    return tuple(state)
+    return tuple(state), is_cleared
 
 
 def averageStrength(img):
+
+    img = cv2.GaussianBlur(img, (3,3), 0, 0, cv2.BORDER_DEFAULT );
 
     dx = cv2.Sobel(img,cv2.CV_32F,1,0,ksize=3)
     dy = cv2.Sobel(img,cv2.CV_32F,0,1,ksize=3)
@@ -155,7 +174,7 @@ def predict_push(req):
     req.orientation = 180 - req.orientation * 180 / np.pi
 
 
-    state = extractState(cv_image, req.x, req.y, req.orientation)
+    state, is_cleared = extractState(cv_image, req.x, req.y, req.orientation)
 
     action = np.argmax(Q[state])
     direction = VALID_ACTIONS[action]
@@ -198,8 +217,6 @@ def predict_push(req):
     print(direction)
 
 
-    print("Theta before:")
-    print(theta)
 
     if theta >= 0 and theta <= 180:
        theta = 180 - theta
@@ -207,15 +224,12 @@ def predict_push(req):
        theta = 360 - (theta-180)
     else:
        theta = 270 - (theta - 270)
-
-    print("Theta after:")
-    print(theta)
 	
 
     theta = theta * np.pi / 180
-    
 
-    return PushDebrisResponse(res_x1, res_y1, res_x2, res_y2, theta)
+    print("is_cleared ", is_cleared)
+    return PushDebrisResponse(res_x1, res_y1, res_x2, res_y2, theta, is_cleared)
 
 
 def push_debris_server():
